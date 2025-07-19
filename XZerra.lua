@@ -1,18 +1,16 @@
--- XZerra Client FULL WORKING SCRIPT
--- Dependencies: Roblox Lua, works in any executor supporting Drawing API
-
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Ignore these players (add your testers or script dev names here)
+-- Ignore local player for ESP/Aimbot
 local ignorePlayers = {
     [LocalPlayer.Name] = true,
 }
 
--- SETTINGS (default values)
+-- Settings (default)
 local espEnabled = false
 local chamsEnabled = false
 local tracersEnabled = false
@@ -22,11 +20,11 @@ local aimbotFOV = 90
 local aimbotSmooth = 0.3
 local aimbotLockPart = "Head"
 
--- Storage for drawings and highlights
+-- Storage
 local ESPObjects = {}
 local chamHighlights = {}
 
--- Drawing objects for FOV circle
+-- FOV circle drawing
 local fovCircle = Drawing.new("Circle")
 fovCircle.Color = Color3.new(0, 1, 0)
 fovCircle.Thickness = 2
@@ -34,7 +32,7 @@ fovCircle.NumSides = 100
 fovCircle.Filled = false
 fovCircle.Visible = false
 
--- Helper functions to create ESP drawings
+-- Helper to create ESP drawings
 local function createBox()
     local box = Drawing.new("Square")
     box.Color = Color3.new(1, 0, 0)
@@ -63,12 +61,10 @@ local function createNametag(name)
     return text
 end
 
--- Check if player should be ignored
 local function isIgnored(player)
     return ignorePlayers[player.Name]
 end
 
--- Get closest target for aimbot based on FOV and visibility
 local function getClosestTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local bestDist = aimbotFOV
@@ -84,7 +80,6 @@ local function getClosestTarget()
                 if onScreen then
                     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                     if dist < bestDist then
-                        -- Visibility check raycast
                         local rayParams = RaycastParams.new()
                         rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
                         rayParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -104,9 +99,7 @@ local function getClosestTarget()
     return bestPlayer
 end
 
--- Cleanup function to remove all drawings and highlights when closing
 local function cleanup()
-    -- Remove ESP drawings
     for _, data in pairs(ESPObjects) do
         if data.Box then data.Box:Remove() end
         if data.Tracer then data.Tracer:Remove() end
@@ -114,212 +107,283 @@ local function cleanup()
     end
     ESPObjects = {}
 
-    -- Remove highlights
     for _, hl in pairs(chamHighlights) do
         if hl then hl:Destroy() end
     end
     chamHighlights = {}
 
-    -- Remove FOV circle
     if fovCircle then
         fovCircle:Remove()
     end
 
-    -- Disconnect all connections (added later)
-    if connection_RenderStepped then
-        connection_RenderStepped:Disconnect()
-    end
-    if connection_Aimbot then
-        connection_Aimbot:Disconnect()
-    end
+    if connection_RenderStepped then connection_RenderStepped:Disconnect() end
+    if connection_Aimbot then connection_Aimbot:Disconnect() end
 
-    -- Destroy GUI if any (added later)
-    if mainGui then
-        mainGui:Destroy()
+    if screenGui then
+        screenGui:Destroy()
     end
 end
 
--- Create GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "XZerraClientGui"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = game.CoreGui
+-- === GUI Setup ===
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "XZerraClientGui"
+screenGui.Parent = game.CoreGui
+screenGui.Enabled = false
 
-local mainGui = ScreenGui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 450) -- wider and taller for space
+frame.Position = UDim2.new(0, 20, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
 
-local function createButton(text, pos, size)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+titleBar.Parent = frame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -40, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "XZerra Client"
+titleLabel.TextColor3 = Color3.new(1,1,1)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 18
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 1, 0)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 20
+closeBtn.Parent = titleBar
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui.Enabled = false
+end)
+
+-- Draggable logic
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Button creator with toggle state and callback
+local function createToggle(text, posY, callback)
     local btn = Instance.new("TextButton")
-    btn.Text = text
-    btn.Position = pos
-    btn.Size = size
-    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Position = UDim2.new(0, 10, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     btn.BorderSizePixel = 0
-    btn.AutoButtonColor = true
     btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 18
-    btn.Parent = mainGui
+    btn.TextSize = 20
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Text = text .. ": OFF"
+    btn.Parent = frame
+    local toggled = false
+    btn.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        btn.Text = text .. ": " .. (toggled and "ON" or "OFF")
+        callback(toggled)
+    end)
     return btn
 end
 
-local function createLabel(text, pos, size)
+-- Slider creator for number input
+local function createSlider(labelText, posY, default, min, max, step, callback)
     local label = Instance.new("TextLabel")
-    label.Text = text
-    label.Position = pos
-    label.Size = size
+    label.Text = labelText
+    label.Size = UDim2.new(1, -20, 0, 20)
+    label.Position = UDim2.new(0, 10, 0, posY)
     label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextColor3 = Color3.new(1,1,1)
     label.Font = Enum.Font.SourceSans
     label.TextSize = 16
-    label.Parent = mainGui
-    return label
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local textBox = Instance.new("TextBox")
+    textBox.Size = UDim2.new(1, -20, 0, 30)
+    textBox.Position = UDim2.new(0, 10, 0, posY + 22)
+    textBox.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    textBox.TextColor3 = Color3.new(1,1,1)
+    textBox.Font = Enum.Font.SourceSans
+    textBox.TextSize = 18
+    textBox.Text = tostring(default)
+    textBox.ClearTextOnFocus = false
+    textBox.Parent = frame
+
+    textBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local val = tonumber(textBox.Text)
+            if val and val >= min and val <= max then
+                callback(val)
+            else
+                textBox.Text = tostring(default) -- revert invalid
+            end
+        end
+    end)
+
+    return textBox
 end
 
-local function createSlider(labelText, pos, size, min, max, default)
-    local label = createLabel(labelText, pos, UDim2.new(0, size.X.Offset, 0, 20))
-    local slider = Instance.new("TextBox")
-    slider.Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset + 22)
-    slider.Size = UDim2.new(0, size.X.Offset, 0, 30)
-    slider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    slider.TextColor3 = Color3.new(1, 1, 1)
-    slider.Text = tostring(default)
-    slider.ClearTextOnFocus = false
-    slider.Font = Enum.Font.SourceSans
-    slider.TextSize = 16
-    slider.Parent = mainGui
-    return label, slider
-end
-
--- Toggle Buttons
-local espBtn = createButton("ESP: OFF", UDim2.new(0, 20, 0, 20), UDim2.new(0, 120, 0, 35))
-local chamsBtn = createButton("Chams: OFF", UDim2.new(0, 160, 0, 20), UDim2.new(0, 120, 0, 35))
-local tracersBtn = createButton("Tracers: OFF", UDim2.new(0, 300, 0, 20), UDim2.new(0, 120, 0, 35))
-local nametagsBtn = createButton("Nametags: OFF", UDim2.new(0, 440, 0, 20), UDim2.new(0, 120, 0, 35))
-local aimbotBtn = createButton("Aimbot: OFF", UDim2.new(0, 580, 0, 20), UDim2.new(0, 120, 0, 35))
-
--- Sliders
-local fovLabel, fovSlider = createSlider("Aimbot FOV (px)", UDim2.new(0, 20, 0, 70), UDim2.new(0, 180, 0, 50), 10, 300, aimbotFOV)
-local smoothLabel, smoothSlider = createSlider("Aimbot Smoothness (0-1)", UDim2.new(0, 220, 0, 70), UDim2.new(0, 180, 0, 50), 0, 1, aimbotSmooth)
-
--- Close button
-local closeBtn = createButton("X", UDim2.new(1, -40, 0, 10), UDim2.new(0, 30, 0, 30))
-closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-
--- Button click handlers
-espBtn.MouseButton1Click:Connect(function()
-    espEnabled = not espEnabled
-    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
+-- Toggle buttons with callbacks to set variables and update related stuff
+local espBtn = createToggle("ESP", 50, function(state)
+    espEnabled = state
 end)
 
-chamsBtn.MouseButton1Click:Connect(function()
-    chamsEnabled = not chamsEnabled
-    chamsBtn.Text = "Chams: " .. (chamsEnabled and "ON" or "OFF")
+local chamsBtn = createToggle("Chams", 100, function(state)
+    chamsEnabled = state
 end)
 
-tracersBtn.MouseButton1Click:Connect(function()
-    tracersEnabled = not tracersEnabled
-    tracersBtn.Text = "Tracers: " .. (tracersEnabled and "ON" or "OFF")
+local tracersBtn = createToggle("Tracers", 150, function(state)
+    tracersEnabled = state
 end)
 
-nametagsBtn.MouseButton1Click:Connect(function()
-    nametagsEnabled = not nametagsEnabled
-    nametagsBtn.Text = "Nametags: " .. (nametagsEnabled and "ON" or "OFF")
+local nametagsBtn = createToggle("Nametags", 200, function(state)
+    nametagsEnabled = state
 end)
 
-aimbotBtn.MouseButton1Click:Connect(function()
-    aimbotEnabled = not aimbotEnabled
-    aimbotBtn.Text = "Aimbot: " .. (aimbotEnabled and "ON" or "OFF")
-    fovCircle.Visible = aimbotEnabled
+local aimbotBtn = createToggle("Aimbot", 250, function(state)
+    aimbotEnabled = state
+    fovCircle.Visible = state
 end)
 
--- Slider input handlers
-local function updateFOV()
-    local val = tonumber(fovSlider.Text)
-    if val and val >= 10 and val <= 300 then
-        aimbotFOV = val
-    else
-        fovSlider.Text = tostring(aimbotFOV)
+local fovBox = createSlider("Aimbot FOV (1-180)", 300, aimbotFOV, 1, 180, 1, function(val)
+    aimbotFOV = val
+end)
+
+local smoothBox = createSlider("Aimbot Smooth (0.01-1)", 350, aimbotSmooth, 0.01, 1, 0.01, function(val)
+    aimbotSmooth = val
+end)
+
+-- Highlight function for chams
+local function updateChams()
+    -- Remove old highlights
+    for _, hl in pairs(chamHighlights) do
+        if hl then hl:Destroy() end
     end
-    fovCircle.Radius = aimbotFOV
-end
+    chamHighlights = {}
 
-local function updateSmooth()
-    local val = tonumber(smoothSlider.Text)
-    if val and val >= 0 and val <= 1 then
-        aimbotSmooth = val
-    else
-        smoothSlider.Text = tostring(aimbotSmooth)
+    if chamsEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if not isIgnored(player) and player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Adornee = player.Character
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+                    highlight.Parent = workspace
+                    table.insert(chamHighlights, highlight)
+                end
+            end
+        end
     end
 end
 
-fovSlider.FocusLost:Connect(updateFOV)
-smoothSlider.FocusLost:Connect(updateSmooth)
-
--- Close button handler
-closeBtn.MouseButton1Click:Connect(function()
-    cleanup()
-end)
-
--- Aimbot hold mouse button state
-local holding = false
-
--- Main RenderStepped connection for ESP and visuals
-connection_RenderStepped = RunService.RenderStepped:Connect(function()
-    local viewportSize = Camera.ViewportSize
-    fovCircle.Position = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
-    fovCircle.Radius = aimbotFOV
-
-    local playersOnScreen = {}
-
+-- Update ESP drawings
+local function updateESP()
     for _, player in pairs(Players:GetPlayers()) do
-        if not isIgnored(player) and player.Character then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            local head = player.Character:FindFirstChild("Head")
+        if isIgnored(player) then
+            -- Remove any existing ESP
+            if ESPObjects[player] then
+                if ESPObjects[player].Box then ESPObjects[player].Box.Visible = false end
+                if ESPObjects[player].Tracer then ESPObjects[player].Tracer.Visible = false end
+                if ESPObjects[player].Nametag then ESPObjects[player].Nametag.Visible = false end
+            end
+        else
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
-            if humanoid and humanoid.Health > 0 and hrp and head then
-                playersOnScreen[player] = true
+            if hum and hum.Health > 0 and hrp then
+                local rootPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if not ESPObjects[player] then
+                    ESPObjects[player] = {
+                        Box = createBox(),
+                        Tracer = createTracer(),
+                        Nametag = createNametag(player.Name),
+                    }
+                end
 
-                local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    if not ESPObjects[player] then
-                        ESPObjects[player] = {
-                            Box = createBox(),
-                            Tracer = createTracer(),
-                            Nametag = createNametag(player.Name)
-                        }
-                    end
+                local box = ESPObjects[player].Box
+                local tracer = ESPObjects[player].Tracer
+                local nametag = ESPObjects[player].Nametag
 
-                    local box = ESPObjects[player].Box
-                    local tracer = ESPObjects[player].Tracer
-                    local nametag = ESPObjects[player].Nametag
+                if espEnabled then
+                    -- Calculate box size roughly
+                    local head = char:FindFirstChild("Head")
+                    local root = hrp.Position
+                    if head then
+                        local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position)
+                        if onScreen and headOnScreen then
+                            local sizeY = math.abs(headPos.Y - rootPos.Y)
+                            local sizeX = sizeY / 2
 
-                    local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
-                    local boxHeight = math.clamp(300 / distance, 20, 150)
-                    local boxWidth = boxHeight / 2
-
-                    local boxPosX = screenPos.X - boxWidth / 2
-                    local boxPosY = screenPos.Y - boxHeight / 2
-
-                    if espEnabled then
-                        box.Position = Vector2.new(boxPosX, boxPosY)
-                        box.Size = Vector2.new(boxWidth, boxHeight)
-                        box.Visible = true
+                            -- Draw box around root + head
+                            box.Visible = true
+                            box.Size = Vector2.new(sizeX, sizeY)
+                            box.Position = Vector2.new(rootPos.X - sizeX/2, rootPos.Y - sizeY/2)
+                        else
+                            box.Visible = false
+                        end
                     else
                         box.Visible = false
                     end
+                else
+                    box.Visible = false
+                end
 
-                    if tracersEnabled then
-                        tracer.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-                        tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-                        tracer.Visible = true
-                    else
-                        tracer.Visible = false
-                    end
+                if tracersEnabled then
+                    local bottomScreen = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                    tracer.From = bottomScreen
+                    tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+                    tracer.Visible = true
+                else
+                    tracer.Visible = false
+                end
 
-                    if nametagsEnabled then
-                        local headPos, onScreenHead = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-                        if onScreenHead then
+                if nametagsEnabled then
+                    local head = char:FindFirstChild("Head")
+                    if head then
+                        local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                        if headOnScreen then
                             nametag.Position = Vector2.new(headPos.X, headPos.Y)
                             nametag.Visible = true
                         else
@@ -328,90 +392,65 @@ connection_RenderStepped = RunService.RenderStepped:Connect(function()
                     else
                         nametag.Visible = false
                     end
-
-                    if chamsEnabled then
-                        if not chamHighlights[player] then
-                            local highlight = Instance.new("Highlight")
-                            highlight.Adornee = player.Character
-                            highlight.Parent = workspace
-                            highlight.FillColor = Color3.fromRGB(0, 255, 0)
-                            highlight.FillTransparency = 0.5
-                            highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
-                            highlight.OutlineTransparency = 0.3
-                            chamHighlights[player] = highlight
-                        end
-                    else
-                        if chamHighlights[player] then
-                            chamHighlights[player]:Destroy()
-                            chamHighlights[player] = nil
-                        end
-                    end
                 else
-                    if ESPObjects[player] then
-                        ESPObjects[player].Box.Visible = false
-                        ESPObjects[player].Tracer.Visible = false
-                        ESPObjects[player].Nametag.Visible = false
-                    end
-                    if chamHighlights[player] then
-                        chamHighlights[player]:Destroy()
-                        chamHighlights[player] = nil
-                    end
+                    nametag.Visible = false
                 end
             else
                 if ESPObjects[player] then
-                    ESPObjects[player].Box.Visible = false
-                    ESPObjects[player].Tracer.Visible = false
-                    ESPObjects[player].Nametag.Visible = false
-                end
-                if chamHighlights[player] then
-                    chamHighlights[player]:Destroy()
-                    chamHighlights[player] = nil
+                    if ESPObjects[player].Box then ESPObjects[player].Box.Visible = false end
+                    if ESPObjects[player].Tracer then ESPObjects[player].Tracer.Visible = false end
+                    if ESPObjects[player].Nametag then ESPObjects[player].Nametag.Visible = false end
                 end
             end
         end
     end
+end
 
-    -- Cleanup for players who left/died
-    for player, _ in pairs(ESPObjects) do
-        if not playersOnScreen[player] then
-            if ESPObjects[player].Box then ESPObjects[player].Box:Remove() end
-            if ESPObjects[player].Tracer then ESPObjects[player].Tracer:Remove() end
-            if ESPObjects[player].Nametag then ESPObjects[player].Nametag:Remove() end
-            ESPObjects[player] = nil
-        end
-    end
-end)
-
--- Aimbot update (smoothly move camera and hold mouse button)
-connection_Aimbot = RunService.RenderStepped:Connect(function()
-    if not aimbotEnabled then
-        if holding then
-            UserInputService:SendMouseButtonEvent(1, false, false, game)
-            holding = false
-        end
-        return
-    end
-
-    local target = getClosestTarget()
-    if target and target.Character and target.Character:FindFirstChild(aimbotLockPart) then
-        local head = target.Character[aimbotLockPart]
-        local camPos = Camera.CFrame.Position
-        local direction = (head.Position - camPos).Unit
-        local targetCFrame = CFrame.new(camPos, camPos + direction)
-
-        -- Smooth lerp to target
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 - aimbotSmooth)
-
-        if not holding then
-            UserInputService:SendMouseButtonEvent(1, true, false, game)
-            holding = true
-        end
+-- Update loop
+local connection_RenderStepped = RunService.RenderStepped:Connect(function()
+    updateESP()
+    updateChams()
+    -- Update FOV circle for aimbot
+    if aimbotEnabled then
+        fovCircle.Visible = true
+        fovCircle.Radius = (aimbotFOV / 180) * (Camera.ViewportSize.X / 2)
+        fovCircle.Position = UserInputService:GetMouseLocation()
     else
-        if holding then
-            UserInputService:SendMouseButtonEvent(1, false, false, game)
-            holding = false
+        fovCircle.Visible = false
+    end
+end)
+
+-- Aimbot aiming logic
+local connection_Aimbot = RunService.RenderStepped:Connect(function()
+    if aimbotEnabled then
+        local target = getClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild(aimbotLockPart) then
+            local headPos = target.Character[aimbotLockPart].Position
+            local camPos = Camera.CFrame.Position
+
+            -- Calculate desired CFrame to look at
+            local lookAt = CFrame.new(camPos, headPos)
+
+            -- Smoothly interpolate camera rotation
+            local currentCFrame = Camera.CFrame
+            local newCFrame = currentCFrame:Lerp(lookAt, aimbotSmooth)
+            Camera.CFrame = newCFrame
         end
     end
 end)
 
-print("[XZerra] Client loaded! Use GUI to toggle features.")
+-- Toggle GUI visibility with F1
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F1 then
+        screenGui.Enabled = not screenGui.Enabled
+    end
+end)
+
+-- Cleanup on script unload (optional)
+--[[
+game:BindToClose(function()
+    cleanup()
+end)
+--]]
+
+print("XZerra Client loaded! Press F1 to toggle GUI.")
