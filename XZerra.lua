@@ -1,4 +1,4 @@
--- XZerra Client with Terms of Service Acceptance
+-- XZerra Client with Terms of Service Acceptance + Sliders + Close Button
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -93,10 +93,6 @@ local aimbotFOV = 90
 local aimbotSmooth = 0.5
 local aimbotLockPart = "Head"
 
-local superSpeedEnabled = false
-local normalSpeed = 16
-local superSpeed = 30
-
 local ignorePlayers = {
     ["scripttester129382"] = true,
     ["TestingScripts12354"] = true,
@@ -111,6 +107,8 @@ fovCircle.NumSides = 100
 fovCircle.Filled = false
 fovCircle.Radius = aimbotFOV
 fovCircle.Visible = false
+
+local connections = {}
 
 local function createBox()
     local d = Drawing.new("Square")
@@ -164,7 +162,7 @@ local function getClosestTarget()
     return bestPlr
 end
 
-RunService.RenderStepped:Connect(function()
+connections.renderStepped = RunService.RenderStepped:Connect(function()
     local vs = Camera.ViewportSize
     fovCircle.Position = Vector2.new(vs.X/2, vs.Y/2)
     fovCircle.Radius = aimbotFOV
@@ -245,7 +243,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 local holding = false
-RunService.RenderStepped:Connect(function()
+connections.aimbotStep = RunService.RenderStepped:Connect(function()
     if not aimbotEnabled then
         if holding then
             UserInputService:SendMouseButtonEvent(1, false, false, game)
@@ -273,26 +271,14 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-local function setSpeed(enabled)
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.WalkSpeed = enabled and superSpeed or normalSpeed
-    end
-end
-
-LocalPlayer.CharacterAdded:Connect(function()
-    wait(1)
-    setSpeed(superSpeedEnabled)
-end)
-
 -- GUI Creation
 local SG = Instance.new("ScreenGui")
 SG.Name = "XZerraClient"
 SG.Parent = game:GetService("CoreGui")
 
 local main = Instance.new("Frame", SG)
-main.Size = UDim2.new(0,300,0,450)
-main.Position = UDim2.new(0,20,0.5,-225)
+main.Size = UDim2.new(0,300,0,480)
+main.Position = UDim2.new(0,20,0.5,-240)
 main.BackgroundColor3 = Color3.new(0.1,0.1,0.1)
 main.BorderSizePixel = 0
 main.Active = true
@@ -305,6 +291,37 @@ title.Font = Enum.Font.SourceSansBold
 title.TextSize = 24
 title.TextColor3 = Color3.new(1,1,1)
 title.Text = "XZerra Client"
+
+-- Close (X) Button
+local closeBtn = Instance.new("TextButton", main)
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 5)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 20
+closeBtn.TextColor3 = Color3.new(1,0,0)
+closeBtn.BackgroundColor3 = Color3.new(0.2,0.2,0.2)
+closeBtn.BorderSizePixel = 0
+
+closeBtn.MouseButton1Click:Connect(function()
+    -- Clean up drawings
+    for _, o in pairs(ESPObjects) do
+        if o.Box then o.Box:Remove() end
+        if o.Tracer then o.Tracer:Remove() end
+        if o.Nametag then o.Nametag:Remove() end
+    end
+    for _, h in pairs(chamHighlights) do
+        if h then h:Destroy() end
+    end
+    fovCircle:Remove()
+    -- Disconnect connections
+    for _, conn in pairs(connections) do
+        if conn then conn:Disconnect() end
+    end
+    -- Destroy GUI
+    SG:Destroy()
+    print("[XZerra] Client closed and cleaned up.")
+end)
 
 local y = 50
 local function addToggle(txt, init, cb)
@@ -322,20 +339,76 @@ local function addToggle(txt, init, cb)
         btn.Text = txt..(on and ": ON" or ": OFF")
         cb(on)
     end)
-    y = y + 40
+    y = y + 45
     return btn
 end
 
+local function addSlider(txt, min, max, def, decimals, cb)
+    local label = Instance.new("TextLabel", main)
+    label.Size = UDim2.new(1,-20,0,25)
+    label.Position = UDim2.new(0,10,0,y)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.SourceSans
+    label.TextSize = 18
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Text = txt..": "..tostring(def)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    y = y + 25
+
+    local sliderFrame = Instance.new("Frame", main)
+    sliderFrame.Size = UDim2.new(1,-20,0,20)
+    sliderFrame.Position = UDim2.new(0,10,0,y)
+    sliderFrame.BackgroundColor3 = Color3.new(0.2,0.2,0.2)
+    sliderFrame.BorderSizePixel = 0
+
+    local fill = Instance.new("Frame", sliderFrame)
+    fill.Size = UDim2.new((def-min)/(max-min),0,1,0)
+    fill.BackgroundColor3 = Color3.new(0,1,0)
+
+    local dragging = false
+
+    sliderFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    sliderFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    sliderFrame.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouseX = math.clamp(input.Position.X - sliderFrame.AbsolutePosition.X, 0, sliderFrame.AbsoluteSize.X)
+            local value = (mouseX / sliderFrame.AbsoluteSize.X) * (max - min) + min
+            value = math.floor(value * (10^decimals)) / (10^decimals)
+            fill.Size = UDim2.new((value-min)/(max-min),0,1,0)
+            label.Text = txt..": "..tostring(value)
+            cb(value)
+        end
+    end)
+
+    y = y + 35
+end
+
+-- Add Toggles
 addToggle("ESP", espEnabled, function(v) espEnabled = v end)
 addToggle("Chams", chamsEnabled, function(v) chamsEnabled = v end)
 addToggle("Tracers", tracersEnabled, function(v) tracersEnabled = v end)
 addToggle("Nametags", nametagsEnabled, function(v) nametagsEnabled = v end)
-addToggle("Aimbot", aimbotEnabled, function(v) aimbotEnabled = v fovCircle.Visible = v end)
-addToggle("Super Speed", superSpeedEnabled, function(v)
-    superSpeedEnabled = v
-    setSpeed(v)
+addToggle("Aimbot", aimbotEnabled, function(v) 
+    aimbotEnabled = v 
+    fovCircle.Visible = v
+end)
+
+-- Add Sliders for Aimbot FOV and Smooth
+addSlider("Aimbot FOV", 20, 300, aimbotFOV, 0, function(val)
+    aimbotFOV = val
+end)
+
+addSlider("Aimbot Smooth", 0, 1, aimbotSmooth, 2, function(val)
+    aimbotSmooth = val
 end)
 
 print("[XZerra] Loaded with Terms accepted.")
-
--- END OF SCRIPT
