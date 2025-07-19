@@ -7,10 +7,11 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Ignore local player for ESP/Aimbot
 local ignorePlayers = {
-    [LocalPlayer.Name]
-	["TestingScripts12354"] = true,
-	["scripttester129382"]
-}
+    [LocalPlayer.Name] = true,
+    ["TestingScripts12354"] = true,
+    ["scripttester129382"] = true
+}  -- This is the correct closing }
+
 
 -- Settings (default)
 local espEnabled = false
@@ -102,6 +103,11 @@ local function getClosestTarget()
 end
 
 local function cleanup()
+    -- Disconnect connections
+    if connection_RenderStepped then connection_RenderStepped:Disconnect() end
+    if connection_Aimbot then connection_Aimbot:Disconnect() end
+    
+    -- Destroy ESP objects
     for _, data in pairs(ESPObjects) do
         if data.Box then data.Box:Remove() end
         if data.Tracer then data.Tracer:Remove() end
@@ -109,22 +115,23 @@ local function cleanup()
     end
     ESPObjects = {}
 
+    -- Destroy cham highlights
     for _, hl in pairs(chamHighlights) do
         if hl then hl:Destroy() end
     end
     chamHighlights = {}
 
+    -- Remove FOV circle
     if fovCircle then
         fovCircle:Remove()
     end
 
-    if connection_RenderStepped then connection_RenderStepped:Disconnect() end
-    if connection_Aimbot then connection_Aimbot:Disconnect() end
-
+    -- Remove screen GUI
     if screenGui then
         screenGui:Destroy()
     end
 end
+
 
 -- === GUI Setup ===
 local screenGui = Instance.new("ScreenGui")
@@ -166,8 +173,13 @@ closeBtn.TextSize = 20
 closeBtn.Parent = titleBar
 
 closeBtn.MouseButton1Click:Connect(function()
-    screenGui.Enabled = false
+    script:Destroy()
 end)
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui.Enabled = false
+    cleanup()
+end)
+
 
 -- Draggable logic
 local dragging = false
@@ -282,8 +294,9 @@ end)
 
 local aimbotBtn = createToggle("Aimbot", 250, function(state)
     aimbotEnabled = state
-    fovCircle.Visible = state
+    fovCircle.Visible = state  -- Control FOV visibility when toggling
 end)
+
 
 local fovBox = createSlider("Aimbot FOV (1-180)", 300, aimbotFOV, 1, 180, 1, function(val)
     aimbotFOV = val
@@ -294,54 +307,69 @@ local smoothBox = createSlider("Aimbot Smooth (0.01-1)", 350, aimbotSmooth, 0.01
 end)
 
 -- Highlight function for chams
--- Optimized function for chams highlighting
+-- Highlight function for chams
+-- Highlight function for chams
 local function updateChams()
     -- Only update if chams are enabled
-    if not chamsEnabled then return end
+    if not chamsEnabled then
+        -- When chams is turned off, hide all highlights
+        for player, highlight in pairs(chamHighlights) do
+            if highlight then
+                highlight.Enabled = false  -- Hide the highlight
+            end
+        end
+        return
+    end
 
-    -- Create and update highlights only if necessary
+    -- Create and update highlights only if chamsEnabled = true
     for _, player in pairs(Players:GetPlayers()) do
         if not isIgnored(player) and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-
-            -- Check if the player already has a highlight
-            local existingHighlight = chamHighlights[player]
-
             if hrp then
+                -- Check if the player already has a highlight
+                local existingHighlight = chamHighlights[player]
+
                 if not existingHighlight then
                     -- Create a new highlight only if it doesn't exist
                     local highlight = Instance.new("Highlight")
                     highlight.Adornee = player.Character
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
-                    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0)  -- Green fill for chams
+                    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)  -- Green outline for chams
                     highlight.Parent = workspace
+                    highlight.Enabled = true  -- Ensure it's enabled
                     chamHighlights[player] = highlight
                 else
-                    -- Update the existing highlight (optional, if properties need updates)
-                    existingHighlight.Adornee = player.Character
-                    existingHighlight.Visible = true  -- Ensure it's visible
+                    -- Ensure highlight is visible and attached to the character
+                    if existingHighlight.Parent == nil then
+                        -- If the highlight was removed from workspace, recreate it
+                        existingHighlight.Adornee = player.Character
+                        existingHighlight.Parent = workspace
+                    end
+                    existingHighlight.Enabled = true  -- Ensure it's visible
                 end
-            elseif existingHighlight then
-                -- Remove the highlight if the player has no HumanoidRootPart
-                existingHighlight.Visible = false
+            elseif chamHighlights[player] then
+                -- If the player has no HumanoidRootPart, hide their highlight
+                chamHighlights[player].Enabled = false
             end
-        else
-            -- Ensure highlight is hidden if the player is not in the game or has no character
-            local existingHighlight = chamHighlights[player]
-            if existingHighlight then
-                existingHighlight.Visible = false
-            end
+        elseif chamHighlights[player] then
+            -- If the player has no character, hide their highlight
+            chamHighlights[player].Enabled = false
         end
     end
 end
 
 
+
+
+
+
 -- Update ESP drawings
+-- Update ESP and tracers logic
 local function updateESP()
     for _, player in pairs(Players:GetPlayers()) do
         if isIgnored(player) then
-            -- Remove any existing ESP
+            -- Remove any existing ESP elements (Box, Tracer, Nametag)
             if ESPObjects[player] then
                 if ESPObjects[player].Box then ESPObjects[player].Box.Visible = false end
                 if ESPObjects[player].Tracer then ESPObjects[player].Tracer.Visible = false end
@@ -354,6 +382,8 @@ local function updateESP()
 
             if hum and hum.Health > 0 and hrp then
                 local rootPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+
+                -- Initialize ESP objects if they don't exist
                 if not ESPObjects[player] then
                     ESPObjects[player] = {
                         Box = createBox(),
@@ -366,8 +396,8 @@ local function updateESP()
                 local tracer = ESPObjects[player].Tracer
                 local nametag = ESPObjects[player].Nametag
 
+                -- ESP (Box) Handling
                 if espEnabled then
-                    -- Calculate box size roughly
                     local head = char:FindFirstChild("Head")
                     local root = hrp.Position
                     if head then
@@ -376,7 +406,6 @@ local function updateESP()
                             local sizeY = math.abs(headPos.Y - rootPos.Y)
                             local sizeX = sizeY / 2
 
-                            -- Draw box around root + head
                             box.Visible = true
                             box.Size = Vector2.new(sizeX, sizeY)
                             box.Position = Vector2.new(rootPos.X - sizeX/2, rootPos.Y - sizeY/2)
@@ -390,8 +419,9 @@ local function updateESP()
                     box.Visible = false
                 end
 
+                -- Tracer Handling
                 if tracersEnabled then
-                    local bottomScreen = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                    local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                     tracer.From = bottomScreen
                     tracer.To = Vector2.new(rootPos.X, rootPos.Y)
                     tracer.Visible = true
@@ -399,6 +429,7 @@ local function updateESP()
                     tracer.Visible = false
                 end
 
+                -- Nametag Handling
                 if nametagsEnabled then
                     local head = char:FindFirstChild("Head")
                     if head then
@@ -416,6 +447,7 @@ local function updateESP()
                     nametag.Visible = false
                 end
             else
+                -- If player is dead or doesn't exist, hide all ESP elements
                 if ESPObjects[player] then
                     if ESPObjects[player].Box then ESPObjects[player].Box.Visible = false end
                     if ESPObjects[player].Tracer then ESPObjects[player].Tracer.Visible = false end
@@ -425,6 +457,7 @@ local function updateESP()
         end
     end
 end
+
 
 -- Update loop
 local connection_RenderStepped = RunService.RenderStepped:Connect(function()
@@ -453,8 +486,9 @@ local connection_Aimbot = RunService.RenderStepped:Connect(function()
 
             -- Smoothly interpolate camera rotation
             local currentCFrame = Camera.CFrame
-            local newCFrame = currentCFrame:Lerp(lookAt, aimbotSmooth)
-            Camera.CFrame = newCFrame
+			local newCFrame = currentCFrame:Lerp(lookAt, aimbotSmooth)
+			Camera.CFrame = newCFrame
+
         end
     end
 end)
