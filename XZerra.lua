@@ -7,7 +7,9 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Ignore local player for ESP/Aimbot
 local ignorePlayers = {
-    [LocalPlayer.Name] = true,
+    [LocalPlayer.Name]
+	["TestingScripts12354"] = true,
+	["scripttester129382"]
 }
 
 -- Settings (default)
@@ -292,30 +294,48 @@ local smoothBox = createSlider("Aimbot Smooth (0.01-1)", 350, aimbotSmooth, 0.01
 end)
 
 -- Highlight function for chams
+-- Optimized function for chams highlighting
 local function updateChams()
-    -- Remove old highlights
-    for _, hl in pairs(chamHighlights) do
-        if hl then hl:Destroy() end
-    end
-    chamHighlights = {}
+    -- Only update if chams are enabled
+    if not chamsEnabled then return end
 
-    if chamsEnabled then
-        for _, player in pairs(Players:GetPlayers()) do
-            if not isIgnored(player) and player.Character then
-                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
+    -- Create and update highlights only if necessary
+    for _, player in pairs(Players:GetPlayers()) do
+        if not isIgnored(player) and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+
+            -- Check if the player already has a highlight
+            local existingHighlight = chamHighlights[player]
+
+            if hrp then
+                if not existingHighlight then
+                    -- Create a new highlight only if it doesn't exist
                     local highlight = Instance.new("Highlight")
                     highlight.Adornee = player.Character
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                     highlight.FillColor = Color3.fromRGB(0, 255, 0)
                     highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
                     highlight.Parent = workspace
-                    table.insert(chamHighlights, highlight)
+                    chamHighlights[player] = highlight
+                else
+                    -- Update the existing highlight (optional, if properties need updates)
+                    existingHighlight.Adornee = player.Character
+                    existingHighlight.Visible = true  -- Ensure it's visible
                 end
+            elseif existingHighlight then
+                -- Remove the highlight if the player has no HumanoidRootPart
+                existingHighlight.Visible = false
+            end
+        else
+            -- Ensure highlight is hidden if the player is not in the game or has no character
+            local existingHighlight = chamHighlights[player]
+            if existingHighlight then
+                existingHighlight.Visible = false
             end
         end
     end
 end
+
 
 -- Update ESP drawings
 local function updateESP()
