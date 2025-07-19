@@ -5,6 +5,76 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
+-- Disclaimer GUI
+local disclaimerGui = Instance.new("ScreenGui")
+disclaimerGui.Name = "DisclaimerGui"
+disclaimerGui.Parent = game.CoreGui
+disclaimerGui.Enabled = true  -- Initially enabled to block access to the menu
+
+-- Frame for disclaimer
+local disclaimerFrame = Instance.new("Frame")
+disclaimerFrame.Size = UDim2.new(0, 400, 0, 300)
+disclaimerFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+disclaimerFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+disclaimerFrame.BorderSizePixel = 0
+disclaimerFrame.Parent = disclaimerGui
+
+-- Label with disclaimer text
+local disclaimerLabel = Instance.new("TextLabel")
+disclaimerLabel.Size = UDim2.new(1, 0, 0.7, 0)
+disclaimerLabel.Position = UDim2.new(0, 0, 0, 0)
+disclaimerLabel.BackgroundTransparency = 1
+disclaimerLabel.Text = "By using this, you acknowledge that we are not responsible for any bans or issues that may arise."
+disclaimerLabel.TextColor3 = Color3.new(1, 1, 1)
+disclaimerLabel.Font = Enum.Font.SourceSans
+disclaimerLabel.TextSize = 18
+disclaimerLabel.TextWrapped = true
+disclaimerLabel.TextXAlignment = Enum.TextXAlignment.Center
+disclaimerLabel.TextYAlignment = Enum.TextYAlignment.Center
+disclaimerLabel.Parent = disclaimerFrame
+
+-- Accept button
+local acceptButton = Instance.new("TextButton")
+acceptButton.Size = UDim2.new(0, 150, 0, 40)
+acceptButton.Position = UDim2.new(0.5, -75, 0.8, 0)
+acceptButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+acceptButton.Text = "Accept"
+acceptButton.TextColor3 = Color3.new(1, 1, 1)
+acceptButton.Font = Enum.Font.SourceSansBold
+acceptButton.TextSize = 20
+acceptButton.Parent = disclaimerFrame
+
+-- Message that will show after accepting disclaimer
+local loadedMessageLabel = Instance.new("TextLabel")
+loadedMessageLabel.Size = UDim2.new(0, 400, 0, 50)  -- Size of the label
+loadedMessageLabel.Position = UDim2.new(0.5, -200, 0.5, 100)  -- Position on screen
+loadedMessageLabel.BackgroundTransparency = 1  -- No background color
+loadedMessageLabel.Text = ""  -- Initially blank text
+loadedMessageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)  -- White text
+loadedMessageLabel.Font = Enum.Font.SourceSansBold
+loadedMessageLabel.TextSize = 24
+loadedMessageLabel.TextXAlignment = Enum.TextXAlignment.Center
+loadedMessageLabel.TextYAlignment = Enum.TextYAlignment.Center
+loadedMessageLabel.Parent = game.CoreGui
+
+-- Accept Button Clicked
+acceptButton.MouseButton1Click:Connect(function()
+    disclaimerGui.Enabled = false  -- Hide the Disclaimer UI
+
+    -- Display the "Press F1 To View Menu" message
+    loadedMessageLabel.Text = "Press F1 To View Menu."
+end)
+
+-- Detect when F1 is pressed and remove the message
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end  -- Ignore if the input was processed by the game (e.g. typing)
+    
+    if input.KeyCode == Enum.KeyCode.F1 then
+        loadedMessageLabel.Text = ""  -- Clear the text when F1 is pressed
+    end
+end)
+
+
 -- Ignore local player for ESP/Aimbot
 local ignorePlayers = {
     [LocalPlayer.Name] = true,
