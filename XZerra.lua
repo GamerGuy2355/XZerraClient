@@ -207,7 +207,7 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "XZerraClientGui"
 screenGui.Parent = game.CoreGui
-screenGui.Enabled = false
+screenGui.Enabled = true
 
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 220, 0, 450) -- wider and taller for space
