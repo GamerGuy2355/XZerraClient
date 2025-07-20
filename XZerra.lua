@@ -400,9 +400,13 @@ end
 local function aimAt(target)
     if not target or not target.Character then return end
     
-    local part = target.Character:FindFirstChild(targetPart) or 
-                 target.Character:FindFirstChild("HumanoidRootPart") or 
-                 target.Character:FindFirstChild("Head")
+    local part
+    if targetPart == "Random" then
+        -- Randomly select between Head and HumanoidRootPart
+        part = math.random(1, 2) == 1 and target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
+    else
+        part = target.Character:FindFirstChild(targetPart)
+    end
     
     if part then
         local camera = workspace.CurrentCamera
@@ -420,18 +424,6 @@ local function aimAt(target)
         camera.CFrame = CFrame.new(cameraCFrame.Position, cameraCFrame.Position + smoothedLook)
     end
 end
-
--- Aimbot Loop
-RunService.RenderStepped:Connect(function()
-    fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-    
-    if aimbotEnabled then
-        local closestPlayer = getClosestPlayer()
-        if closestPlayer then
-            aimAt(closestPlayer)
-        end
-    end
-end)
 
 -- ========== ESP IMPLEMENTATION ==========
 local espEnabled = false
